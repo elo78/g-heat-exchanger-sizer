@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>G-Heat Exchanger Sizer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+:root{--bg:#fff;--card:#fff;--ink:#1f1a2b;--mute:#6b6577;--line:#ebe7f2;--hot:#b0237a;--cold:#5b2fc9;--brand:#6a2bd9;--bad:#b3261e;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121014;--card:#1a171f;--ink:#f4f1f8;--mute:#aaa3b6;--line:#2e2938;--hot:#ff7ac0;--cold:#a98bff;--brand:#b99cff;--bad:#ff8a80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121014;--card:#1a171f;--ink:#f4f1f8;--mute:#aaa3b6;--line:#2e2938;--hot:#ff7ac0;--cold:#a98bff;--brand:#b99cff;--bad:#ff8a80;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.7rem;margin:0 0 4px;letter-spacing:-.01em}
+p.sub{color:var(--mute);margin:0 0 20px;max-width:60ch}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{font-size:1rem;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+label{display:block;font-size:.85rem;color:var(--mute)}
+input,select{width:100%;box-sizing:border-box;margin-top:4px;padding:9px 10px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px}
+input:focus-visible,select:focus-visible{outline:2px solid var(--cold);outline-offset:1px}
+.hot h2{color:var(--hot)}.cold h2{color:var(--cold)}
+.res{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.res div{border-left:3px solid var(--line);padding-left:10px}
+.res b{display:block;font-size:1.35rem}
+.res span{font-size:.8rem;color:var(--mute)}
+#area{border-left-color:var(--brand)}#rA{color:var(--brand)}
+#err{color:var(--bad);font-weight:600;margin:0 0 10px}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--mute);font-size:11px;font-family:inherit}
+.note{font-size:.85rem;color:var(--mute)}
+</style></head><body><main>
+<h1>G-Heat Exchanger Sizer</h1>
+<p class="sub">Enter the hot stream, the cold inlet, and U. The tool solves the energy balance and returns the area you need.</p>
+
+<div class="grid" style="margin-bottom:16px">
+<section class="hot" style="margin:0"><h2>Hot stream</h2><div class="grid">
+<label>Inlet °C<input id="thi" type="number" value="120"></label>
+<label>Outlet °C<input id="tho" type="number" value="70"></label>
+<label>Flow kg/s<input id="mh" type="number" value="2" step="any"></label>
+<label>cp kJ/kg·K<input id="cph" type="number" value="2.1" step="any"></label></div></section>
+<section class="cold" style="margin:0"><h2>Cold stream</h2><div class="grid">
+<label>Inlet °C<input id="tci" type="number" value="20"></label>
+<label>Flow kg/s<input id="mc" type="number" value="3" step="any"></label>
+<label>cp kJ/kg·K<input id="cpc" type="number" value="4.18" step="any"></label></div></section>
+</div>
+
+<section><h2>Exchanger</h2><div class="grid">
+<label>U (W/m²·K)<input id="u" type="number" value="350" step="any"></label>
+<label>Flow arrangement<select id="arr"><option value="c">Counter-current</option><option value="p">Parallel</option></select></label></div></section>
+
+<section><h2>Result</h2><p id="err"></p>
+<div class="res">
+<div id="area"><b id="rA">–</b><span>Area needed (m²)</span></div>
+<div><b id="rQ">–</b><span>Heat duty (kW)</span></div>
+<div><b id="rT">–</b><span>Cold outlet (°C)</span></div>
+<div><b id="rL">–</b><span>LMTD (°C)</span></div>
+<div><b id="rE">–</b><span>Effectiveness</span></div></div></section>
+
+<section><h2>Temperature profile (schematic, straight lines)</h2>
+<svg id="ch" viewBox="0 0 400 210" role="img" aria-label="Hot and cold stream temperatures along the exchanger"></svg></section>
+
+<p class="note">Method: Q = ṁ·cp·ΔT on the hot side, cold outlet from the same Q, then A = Q ÷ (U·LMTD). Assumes constant cp and U, no phase change, no heat loss. For shell-and-tube passes, multiply LMTD by a correction factor F.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id), v=id=>parseFloat($(id).value);
+const f=(x,d=1)=>isFinite(x)?x.toFixed(d):'–';
+function run(){
+  const thi=v('thi'),tho=v('tho'),mh=v('mh'),cph=v('cph'),tci=v('tci'),mc=v('mc'),cpc=v('cpc'),U=v('u'),par=$('arr').value==='p';
+  ['rA','rQ','rT','rL','rE'].forEach(i=>$(i).textContent='–');$('ch').innerHTML='';$('err').textContent='';
+  if(![thi,tho,tci].every(isFinite)||[mh,cph,mc,cpc,U].some(x=>!(x>0))){$('err').textContent='Fill in every field with a positive number.';return}
+  if(tho>=thi){$('err').textContent='Hot outlet must be lower than hot inlet.';return}
+  if(tci>=thi){$('err').textContent='Cold inlet must be lower than hot inlet.';return}
+  const Q=mh*cph*(thi-tho), tco=tci+Q/(mc*cpc);
+  const d1=par?thi-tci:thi-tco, d2=par?tho-tco:tho-tci;
+  if(d1<=0||d2<=0){$('err').textContent=par?'Parallel flow cannot work: the cold outlet would pass the hot outlet. Try counter-current or a lower duty.':'Temperature cross: the cold outlet would exceed the hot inlet. Lower the hot flow or raise the cold flow.';
+    $('rQ').textContent=f(Q);$('rT').textContent=f(tco);return}
+  const lm=Math.abs(d1-d2)<1e-6?d1:(d1-d2)/Math.log(d1/d2);
+  const A=Q*1000/(U*lm), qmax=Math.min(mh*cph,mc*cpc)*(thi-tci);
+  $('rA').textContent=f(A,2);$('rQ').textContent=f(Q);$('rT').textContent=f(tco);$('rL').textContent=f(lm);$('rE').textContent=f(100*Q/qmax,0)+'%';
+  const lo=Math.min(tci,tho)-5,hi=thi+5,X=x=>40+x*330,Y=t=>180-(t-lo)/(hi-lo)*160;
+  const hot=[[0,thi],[1,tho]],cold=par?[[0,tci],[1,tco]]:[[0,tco],[1,tci]];
+  const line=(p,c)=>`<polyline fill="none" stroke="var(${c})" stroke-width="3" points="${p.map(a=>X(a[0])+','+Y(a[1])).join(' ')}"/>`;
+  const lab=(x,t,c,al)=>`<text x="${x}" y="${Y(t)-6}" text-anchor="${al}" style="fill:var(${c})">${f(t)}°</text>`;
+  $('ch').innerHTML=`<line x1="40" y1="180" x2="370" y2="180" stroke="var(--line)"/><line x1="40" y1="20" x2="40" y2="180" stroke="var(--line)"/>`+
+   line(hot,'--hot')+line(cold,'--cold')+lab(44,thi,'--hot','start')+lab(366,tho,'--hot','end')+lab(44,cold[0][1],'--cold','start')+lab(366,cold[1][1],'--cold','end')+
+   `<text x="205" y="200" text-anchor="middle">Position along exchanger (inlet to outlet of hot stream)</text>`;
+}
+document.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',run));run();
+</script></body></html>
